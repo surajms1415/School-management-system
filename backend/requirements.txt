@@ -1,7 +1,8 @@
 fastapi
 uvicorn
 sqlalchemy
-passlib[bcrypt]
-bcrypt==3.2.2
+bcrypt
 python-jose[cryptography]
 python-multipart
+google-genai
+python-dotenv

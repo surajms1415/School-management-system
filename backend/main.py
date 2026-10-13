@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-import models, schemas, database, auth
+import models, schemas, database, auth, ai_service
 from fastapi.security import OAuth2PasswordRequestForm
-from typing import List
+from typing import List, Optional
 import csv
 from io import StringIO
 from datetime import datetime
@@ -312,6 +312,183 @@ def get_my_results(db: Session = Depends(database.get_db), current_user: models.
 @app.get("/users/me", response_model=schemas.User)
 def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
+
+# ==========================================
+# --- AI Academic Intelligence Endpoints ---
+# ==========================================
+
+@app.get("/ai/attendance-risk/")
+def get_my_attendance_risk(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.role != "Student":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    
+    attendance = db.query(models.Attendance).filter(models.Attendance.student_id == student.id).all()
+    subjects = db.query(models.Subject).all()
+    subjects_map = {s.id: s.name for s in subjects}
+    
+    att_dicts = [{"subject_id": a.subject_id, "status": a.status, "date": str(a.date)} for a in attendance]
+    return ai_service.calculate_attendance_risk(student.name, att_dicts, subjects_map)
+
+
+@app.get("/ai/attendance-risk/{student_id}")
+def get_student_attendance_risk(student_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.role not in ["Admin", "Teacher"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    student = db.query(models.Student).filter(models.Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    attendance = db.query(models.Attendance).filter(models.Attendance.student_id == student.id).all()
+    subjects = db.query(models.Subject).all()
+    subjects_map = {s.id: s.name for s in subjects}
+    
+    att_dicts = [{"subject_id": a.subject_id, "status": a.status, "date": str(a.date)} for a in attendance]
+    return ai_service.calculate_attendance_risk(student.name, att_dicts, subjects_map)
+
+
+@app.get("/ai/attendance-risk-overview/")
+def get_all_attendance_risk_overview(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.role not in ["Admin", "Teacher"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    students = db.query(models.Student).all()
+    subjects = db.query(models.Subject).all()
+    subjects_map = {s.id: s.name for s in subjects}
+    
+    overview = []
+    for st in students:
+        attendance = db.query(models.Attendance).filter(models.Attendance.student_id == st.id).all()
+        att_dicts = [{"subject_id": a.subject_id, "status": a.status, "date": str(a.date)} for a in attendance]
+        risk_info = ai_service.calculate_attendance_risk(st.name, att_dicts, subjects_map)
+        overview.append({
+            "student_id": st.id,
+            "name": st.name,
+            "roll_number": st.roll_number,
+            "grade_level": st.grade_level,
+            "total_classes": risk_info["total_classes"],
+            "attended_classes": risk_info["attended_classes"],
+            "current_percentage": risk_info["current_percentage"],
+            "risk_level": risk_info["risk_level"],
+            "status_label": risk_info["status_label"],
+            "classes_needed_for_75": risk_info["classes_needed_for_75"]
+        })
+    return overview
+
+
+@app.get("/ai/study-plan/")
+def get_study_plan(student_id: Optional[int] = None, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    target_student = None
+    if current_user.role == "Student":
+        target_student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    elif current_user.role in ["Admin", "Teacher"] and student_id is not None:
+        target_student = db.query(models.Student).filter(models.Student.id == student_id).first()
+    elif current_user.role in ["Admin", "Teacher"] and student_id is None:
+        # Default to first student if not specified
+        target_student = db.query(models.Student).first()
+    else:
+        raise HTTPException(status_code=400, detail="Invalid request parameters")
+
+    if not target_student:
+        raise HTTPException(status_code=404, detail="Student record not found")
+
+    results = db.query(models.Result).filter(models.Result.student_id == target_student.id).all()
+    subjects = db.query(models.Subject).all()
+    subjects_map = {s.id: s.name for s in subjects}
+    
+    results_data = []
+    for r in results:
+        results_data.append({
+            "subject_id": r.subject_id,
+            "subject_name": subjects_map.get(r.subject_id, f"Subject #{r.subject_id}"),
+            "marks": r.marks
+        })
+        
+    attendance = db.query(models.Attendance).filter(models.Attendance.student_id == target_student.id).all()
+    att_dicts = [{"subject_id": a.subject_id, "status": a.status, "date": str(a.date)} for a in attendance]
+    attendance_risk = ai_service.calculate_attendance_risk(target_student.name, att_dicts, subjects_map)
+    
+    return ai_service.generate_study_plan(
+        student_name=target_student.name,
+        roll_number=target_student.roll_number,
+        grade_level=target_student.grade_level,
+        results_data=results_data,
+        attendance_summary=attendance_risk
+    )
+
+
+@app.get("/ai/report-card/{student_id}")
+def get_student_report_card(student_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    student = db.query(models.Student).filter(models.Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+        
+    if current_user.role == "Student":
+        if student.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view other students' report cards")
+    elif current_user.role not in ["Admin", "Teacher"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    results = db.query(models.Result).filter(models.Result.student_id == student.id).all()
+    subjects = db.query(models.Subject).all()
+    subjects_map = {s.id: s.name for s in subjects}
+    
+    results_data = []
+    for r in results:
+        results_data.append({
+            "subject_id": r.subject_id,
+            "subject_name": subjects_map.get(r.subject_id, f"Subject #{r.subject_id}"),
+            "marks": r.marks
+        })
+
+    attendance = db.query(models.Attendance).filter(models.Attendance.student_id == student.id).all()
+    att_dicts = [{"subject_id": a.subject_id, "status": a.status, "date": str(a.date)} for a in attendance]
+    attendance_risk = ai_service.calculate_attendance_risk(student.name, att_dicts, subjects_map)
+
+    evaluator_name = current_user.username if current_user.role in ["Admin", "Teacher"] else "Academic Faculty Board"
+    return ai_service.generate_report_card(
+        student_name=student.name,
+        roll_number=student.roll_number,
+        grade_level=student.grade_level,
+        results_data=results_data,
+        attendance_data=attendance_risk,
+        evaluator_name=evaluator_name
+    )
+
+
+@app.get("/ai/my-report-card/")
+def get_my_report_card(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.role != "Student":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    
+    results = db.query(models.Result).filter(models.Result.student_id == student.id).all()
+    subjects = db.query(models.Subject).all()
+    subjects_map = {s.id: s.name for s in subjects}
+    
+    results_data = []
+    for r in results:
+        results_data.append({
+            "subject_id": r.subject_id,
+            "subject_name": subjects_map.get(r.subject_id, f"Subject #{r.subject_id}"),
+            "marks": r.marks
+        })
+
+    attendance = db.query(models.Attendance).filter(models.Attendance.student_id == student.id).all()
+    att_dicts = [{"subject_id": a.subject_id, "status": a.status, "date": str(a.date)} for a in attendance]
+    attendance_risk = ai_service.calculate_attendance_risk(student.name, att_dicts, subjects_map)
+
+    return ai_service.generate_report_card(
+        student_name=student.name,
+        roll_number=student.roll_number,
+        grade_level=student.grade_level,
+        results_data=results_data,
+        attendance_data=attendance_risk,
+        evaluator_name="Academic Board"
+    )
 
 if __name__ == "__main__":
     import uvicorn

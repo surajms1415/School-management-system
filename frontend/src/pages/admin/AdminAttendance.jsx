@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaSearch, FaFilter, FaEdit, FaTrash, FaTimes } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaFilter, FaEdit, FaTrash, FaTimes, FaExclamationTriangle, FaCheckCircle, FaRobot } from 'react-icons/fa';
 import api from '../../utils/api';
 
 export default function AdminAttendance() {
   const [attendance, setAttendance] = useState([]);
   const [students, setStudents] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [riskData, setRiskData] = useState([]);
+  const [selectedRiskFilter, setSelectedRiskFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -26,6 +28,13 @@ export default function AdminAttendance() {
       setAttendance(attRes.data);
       setStudents(studRes.data);
       setSubjects(subRes.data);
+
+      try {
+        const riskRes = await api.get('/ai/attendance-risk-overview/');
+        setRiskData(riskRes.data);
+      } catch (e) {
+        console.warn('Risk overview load error:', e);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -84,12 +93,18 @@ export default function AdminAttendance() {
     return studentName.includes(query) || subjectName.includes(query) || record.date.includes(query);
   });
 
+  const criticalCount = riskData.filter(r => r.risk_level === 'High').length;
+  const cautionCount = riskData.filter(r => r.risk_level === 'Medium').length;
+  const safeCount = riskData.filter(r => r.risk_level === 'Low').length;
+
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex justify-between items-center mb-6">
+    <div className="h-full flex flex-col space-y-4">
+      <div className="flex justify-between items-center mb-2">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Attendance Log</h2>
-          <p className="text-slate-500 text-sm mt-1">View all attendance records and import logs.</p>
+          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            Attendance Log & AI Early Warning Radar
+          </h2>
+          <p className="text-slate-500 text-sm mt-0.5">Audit attendance logs and identify students at risk of falling below the 75% cutoff.</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
@@ -97,6 +112,45 @@ export default function AdminAttendance() {
         >
           <FaPlus /> Add Attendance
         </button>
+      </div>
+
+      {/* AI Attendance Risk Radar Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-red-600 flex items-center gap-1.5">
+              <FaExclamationTriangle /> Critical Debarment Risk (&lt;75%)
+            </p>
+            <p className="text-2xl font-black text-red-700 mt-1">{criticalCount} <span className="text-xs font-semibold text-red-500">students</span></p>
+          </div>
+          <span className="text-xs font-bold text-red-600 bg-red-100 px-3 py-1.5 rounded-xl border border-red-200">
+            Immediate Action Required
+          </span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              Caution Borderline (75-80%)
+            </p>
+            <p className="text-2xl font-black text-amber-800 mt-1">{cautionCount} <span className="text-xs font-semibold text-amber-600">students</span></p>
+          </div>
+          <span className="text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-200">
+            Near Cutoff Boundary
+          </span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+              <FaCheckCircle /> Safe Standing (≥80%)
+            </p>
+            <p className="text-2xl font-black text-emerald-800 mt-1">{safeCount} <span className="text-xs font-semibold text-emerald-600">students</span></p>
+          </div>
+          <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-200">
+            Compliant
+          </span>
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 flex-1 overflow-hidden flex flex-col">
