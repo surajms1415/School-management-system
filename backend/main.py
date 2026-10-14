@@ -258,6 +258,29 @@ def create_subject(subject: schemas.SubjectCreate, db: Session = Depends(databas
 def read_subjects(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     return db.query(models.Subject).offset(skip).limit(limit).all()
 
+@app.put("/subjects/{subject_id}", response_model=schemas.Subject)
+def update_subject(subject_id: int, subject: schemas.SubjectCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.role != "Admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db_subject = db.query(models.Subject).filter(models.Subject.id == subject_id).first()
+    if not db_subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    db_subject.name = subject.name
+    db.commit()
+    db.refresh(db_subject)
+    return db_subject
+
+@app.delete("/subjects/{subject_id}")
+def delete_subject(subject_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.role != "Admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db_subject = db.query(models.Subject).filter(models.Subject.id == subject_id).first()
+    if not db_subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    db.delete(db_subject)
+    db.commit()
+    return {"message": "Subject deleted"}
+
 # --- Teacher Routes ---
 @app.post("/attendance/", response_model=schemas.Attendance)
 def mark_attendance(attendance: schemas.AttendanceCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
@@ -352,6 +375,15 @@ async def upload_attendance(file: UploadFile = File(...), db: Session = Depends(
 def upload_marks(result: schemas.ResultCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     if current_user.role not in ["Admin", "Teacher"]:
         raise HTTPException(status_code=403, detail="Not authorized")
+    existing_result = db.query(models.Result).filter(
+        models.Result.student_id == result.student_id,
+        models.Result.subject_id == result.subject_id
+    ).first()
+    if existing_result:
+        existing_result.marks = result.marks
+        db.commit()
+        db.refresh(existing_result)
+        return existing_result
     db_result = models.Result(**result.dict())
     db.add(db_result)
     db.commit()
@@ -364,12 +396,39 @@ def get_all_results(skip: int = 0, limit: int = 1000, db: Session = Depends(data
         raise HTTPException(status_code=403, detail="Not authorized")
     return db.query(models.Result).offset(skip).limit(limit).all()
 
+@app.put("/results/{result_id}", response_model=schemas.Result)
+def update_result(result_id: int, result: schemas.ResultUpdate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.role not in ["Admin", "Teacher"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db_result = db.query(models.Result).filter(models.Result.id == result_id).first()
+    if not db_result:
+        raise HTTPException(status_code=404, detail="Result not found")
+    for var, value in vars(result).items():
+        if value is not None:
+            setattr(db_result, var, value)
+    db.commit()
+    db.refresh(db_result)
+    return db_result
+
+@app.delete("/results/{result_id}")
+def delete_result(result_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    if current_user.role not in ["Admin", "Teacher"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db_result = db.query(models.Result).filter(models.Result.id == result_id).first()
+    if not db_result:
+        raise HTTPException(status_code=404, detail="Result not found")
+    db.delete(db_result)
+    db.commit()
+    return {"message": "Result deleted"}
+
 # --- Student Routes ---
 @app.get("/my-attendance/", response_model=List[schemas.Attendance])
 def get_my_attendance(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     if current_user.role != "Student":
         raise HTTPException(status_code=403, detail="Not authorized")
     student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    if not student:
+        return []
     return db.query(models.Attendance).filter(models.Attendance.student_id == student.id).all()
 
 @app.get("/my-results/", response_model=List[schemas.Result])
@@ -377,6 +436,8 @@ def get_my_results(db: Session = Depends(database.get_db), current_user: models.
     if current_user.role != "Student":
         raise HTTPException(status_code=403, detail="Not authorized")
     student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    if not student:
+        return []
     return db.query(models.Result).filter(models.Result.student_id == student.id).all()
 
 @app.get("/users/me", response_model=schemas.User)

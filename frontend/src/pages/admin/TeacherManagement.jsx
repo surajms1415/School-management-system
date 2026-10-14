@@ -5,6 +5,7 @@ import api from '../../utils/api';
 
 export default function TeacherManagement() {
   const [teachers, setTeachers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: '', employee_id: '', password: '' });
@@ -66,6 +67,12 @@ export default function TeacherManagement() {
     }
   };
 
+  const filteredTeachers = teachers.filter((teacher) =>
+    teacher.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    teacher.employee_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    teacher.id.toString().includes(searchQuery)
+  );
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
@@ -88,6 +95,8 @@ export default function TeacherManagement() {
             <input 
               type="text" 
               placeholder="Search teachers..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 w-72 shadow-sm transition-shadow"
             />
           </div>
@@ -106,7 +115,7 @@ export default function TeacherManagement() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               <AnimatePresence>
-                {teachers.map((teacher) => (
+                {filteredTeachers.map((teacher) => (
                   <motion.tr 
                     key={teacher.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -145,7 +154,7 @@ export default function TeacherManagement() {
               </AnimatePresence>
             </tbody>
           </table>
-          {teachers.length === 0 && (
+          {filteredTeachers.length === 0 && (
             <div className="flex flex-col items-center justify-center h-64 text-slate-500">
               <p className="text-lg font-medium text-slate-400">No teachers found.</p>
             </div>

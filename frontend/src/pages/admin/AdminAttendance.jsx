@@ -9,6 +9,7 @@ export default function AdminAttendance() {
   const [subjects, setSubjects] = useState([]);
   const [riskData, setRiskData] = useState([]);
   const [selectedRiskFilter, setSelectedRiskFilter] = useState('ALL');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -55,6 +56,17 @@ export default function AdminAttendance() {
     }
   };
 
+  const handleOpenAdd = () => {
+    setFormData({
+      student_id: '',
+      subject_id: '',
+      date: new Date().toISOString().split('T')[0],
+      status: 'Present'
+    });
+    setEditingId(null);
+    setIsModalOpen(true);
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
@@ -87,10 +99,20 @@ export default function AdminAttendance() {
   const getSubjectName = (id) => subjects.find(s => s.id === id)?.name || 'Unknown';
 
   const filteredRecords = attendance.filter(record => {
-    const studentName = getStudentName(record.student_id).toLowerCase();
+    const student = students.find(s => s.id === record.student_id);
+    const studentName = (student?.name || '').toLowerCase();
     const subjectName = getSubjectName(record.subject_id).toLowerCase();
     const query = searchQuery.toLowerCase();
-    return studentName.includes(query) || subjectName.includes(query) || record.date.includes(query);
+    const matchesSearch = studentName.includes(query) || subjectName.includes(query) || record.date.includes(query);
+    const matchesStatus = selectedStatusFilter === 'ALL' || record.status === selectedStatusFilter;
+    
+    let matchesRisk = true;
+    if (selectedRiskFilter !== 'ALL') {
+      const studentRisk = riskData.find(r => r.student_id === record.student_id)?.risk_level || 'Low';
+      matchesRisk = studentRisk === selectedRiskFilter;
+    }
+    
+    return matchesSearch && matchesStatus && matchesRisk;
   });
 
   const criticalCount = riskData.filter(r => r.risk_level === 'High').length;
@@ -107,7 +129,7 @@ export default function AdminAttendance() {
           <p className="text-slate-500 text-sm mt-0.5">Audit attendance logs and identify students at risk of falling below the 75% cutoff.</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenAdd}
           className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md hover:shadow-lg flex items-center gap-2"
         >
           <FaPlus /> Add Attendance
@@ -116,7 +138,10 @@ export default function AdminAttendance() {
 
       {/* AI Attendance Risk Radar Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-between">
+        <div 
+          onClick={() => setSelectedRiskFilter(prev => prev === 'High' ? 'ALL' : 'High')}
+          className={`p-4 rounded-2xl bg-red-50 border cursor-pointer transition-all hover:shadow-md flex items-center justify-between ${selectedRiskFilter === 'High' ? 'border-red-500 ring-2 ring-red-400' : 'border-red-200'}`}
+        >
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-red-600 flex items-center gap-1.5">
               <FaExclamationTriangle /> Critical Debarment Risk (&lt;75%)
@@ -124,11 +149,14 @@ export default function AdminAttendance() {
             <p className="text-2xl font-black text-red-700 mt-1">{criticalCount} <span className="text-xs font-semibold text-red-500">students</span></p>
           </div>
           <span className="text-xs font-bold text-red-600 bg-red-100 px-3 py-1.5 rounded-xl border border-red-200">
-            Immediate Action Required
+            {selectedRiskFilter === 'High' ? 'Filtering Active' : 'Filter Critical'}
           </span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between">
+        <div 
+          onClick={() => setSelectedRiskFilter(prev => prev === 'Medium' ? 'ALL' : 'Medium')}
+          className={`p-4 rounded-2xl bg-amber-50 border cursor-pointer transition-all hover:shadow-md flex items-center justify-between ${selectedRiskFilter === 'Medium' ? 'border-amber-500 ring-2 ring-amber-400' : 'border-amber-200'}`}
+        >
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
               Caution Borderline (75-80%)
@@ -136,11 +164,14 @@ export default function AdminAttendance() {
             <p className="text-2xl font-black text-amber-800 mt-1">{cautionCount} <span className="text-xs font-semibold text-amber-600">students</span></p>
           </div>
           <span className="text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-200">
-            Near Cutoff Boundary
+            {selectedRiskFilter === 'Medium' ? 'Filtering Active' : 'Filter Caution'}
           </span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+        <div 
+          onClick={() => setSelectedRiskFilter(prev => prev === 'Low' ? 'ALL' : 'Low')}
+          className={`p-4 rounded-2xl bg-emerald-50 border cursor-pointer transition-all hover:shadow-md flex items-center justify-between ${selectedRiskFilter === 'Low' ? 'border-emerald-500 ring-2 ring-emerald-400' : 'border-emerald-200'}`}
+        >
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
               <FaCheckCircle /> Safe Standing (≥80%)
@@ -148,26 +179,43 @@ export default function AdminAttendance() {
             <p className="text-2xl font-black text-emerald-800 mt-1">{safeCount} <span className="text-xs font-semibold text-emerald-600">students</span></p>
           </div>
           <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-200">
-            Compliant
+            {selectedRiskFilter === 'Low' ? 'Filtering Active' : 'Filter Safe'}
           </span>
         </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 flex-1 overflow-hidden flex flex-col">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <div className="relative">
-            <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search by student, subject or date..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-80 shadow-sm transition-shadow"
-            />
+        <div className="p-5 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3 bg-slate-50/50">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search by student, subject or date..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-72 shadow-sm transition-shadow"
+              />
+            </div>
+            <select
+              value={selectedStatusFilter}
+              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              className="py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="Present">Present Only</option>
+              <option value="Absent">Absent Only</option>
+              <option value="Late">Late Only</option>
+            </select>
+            {(selectedRiskFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || searchQuery) && (
+              <button 
+                onClick={() => { setSelectedRiskFilter('ALL'); setSelectedStatusFilter('ALL'); setSearchQuery(''); }}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800 bg-slate-200/70 hover:bg-slate-200 px-3 py-2 rounded-xl transition-colors"
+              >
+                Reset Filters
+              </button>
+            )}
           </div>
-          <button className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-medium px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors">
-            <FaFilter /> Filter
-          </button>
         </div>
 
         <div className="flex-1 overflow-auto">

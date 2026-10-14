@@ -35,8 +35,12 @@ class Student(StudentBase):
     class Config:
         from_attributes = True
 
-class StudentUpdate(StudentBase):
-    pass
+class StudentUpdate(BaseModel):
+    name: Optional[str] = None
+    roll_number: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    grade_level: Optional[str] = None
+    emergency_contact: Optional[str] = None
 
 class TeacherBase(BaseModel):
     name: str
@@ -51,8 +55,9 @@ class Teacher(TeacherBase):
     class Config:
         from_attributes = True
 
-class TeacherUpdate(TeacherBase):
-    pass
+class TeacherUpdate(BaseModel):
+    name: Optional[str] = None
+    employee_id: Optional[str] = None
 
 class SubjectBase(BaseModel):
     name: str
@@ -79,8 +84,11 @@ class Attendance(AttendanceBase):
     class Config:
         from_attributes = True
 
-class AttendanceUpdate(AttendanceBase):
-    pass
+class AttendanceUpdate(BaseModel):
+    student_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    date: Optional[date] = None
+    status: Optional[str] = None
 
 class ResultBase(BaseModel):
     student_id: int
@@ -89,6 +97,11 @@ class ResultBase(BaseModel):
 
 class ResultCreate(ResultBase):
     pass
+
+class ResultUpdate(BaseModel):
+    student_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    marks: Optional[float] = None
 
 class Result(ResultBase):
     id: int

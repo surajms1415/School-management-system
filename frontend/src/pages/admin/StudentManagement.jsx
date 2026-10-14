@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaSearch, FaEdit, FaTrash, FaTimes } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEdit, FaTrash, FaTimes, FaFileUpload } from 'react-icons/fa';
 import api from '../../utils/api';
 
 export default function StudentManagement() {
@@ -9,6 +9,26 @@ export default function StudentManagement() {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: '', roll_number: '', password: '', date_of_birth: '', grade_level: '', emergency_contact: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  const fileInputRef = useRef(null);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const data = new FormData();
+    data.append('file', file);
+    try {
+      const res = await api.post('/students/upload/', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert(res.data.message || 'Students imported successfully!');
+      fetchStudents();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to import CSV file. Ensure columns: roll_number, name, dob, grade, emergency');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     fetchStudents();
@@ -86,6 +106,19 @@ export default function StudentManagement() {
           <p className="text-slate-500 text-sm mt-1">Manage and organize all registered students.</p>
         </div>
         <div className="flex gap-3">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            accept=".csv" 
+            onChange={handleFileUpload} 
+            className="hidden" 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200 flex items-center gap-2"
+          >
+            <FaFileUpload /> Import CSV
+          </button>
           <button 
             onClick={() => setIsModalOpen(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2"
