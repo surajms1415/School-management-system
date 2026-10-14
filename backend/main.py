@@ -20,15 +20,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize admin
+# Initialize and reset default accounts for all roles
 def init_db():
     db = database.SessionLocal()
+    default_pw_hash = auth.get_password_hash("1234ms")
+
+    # 1. Admin (username: admin, password: 1234ms)
     admin = db.query(models.User).filter(models.User.username == "admin").first()
     if not admin:
-        hashed_password = auth.get_password_hash("admin")
-        db_admin = models.User(username="admin", hashed_password=hashed_password, role="Admin")
-        db.add(db_admin)
+        admin = models.User(username="admin", hashed_password=default_pw_hash, role="Admin")
+        db.add(admin)
+    else:
+        admin.hashed_password = default_pw_hash
+
+    # 2. Teacher (EMP-101 and alias teacher, password: 1234ms)
+    teacher_user = db.query(models.User).filter(models.User.username == "EMP-101").first()
+    if not teacher_user:
+        teacher_user = models.User(username="EMP-101", hashed_password=default_pw_hash, role="Teacher")
+        db.add(teacher_user)
         db.commit()
+        db.refresh(teacher_user)
+        t_prof = models.Teacher(name="Prof. Robert Davis", employee_id="EMP-101", user_id=teacher_user.id)
+        db.add(t_prof)
+    else:
+        teacher_user.hashed_password = default_pw_hash
+
+    alias_teacher = db.query(models.User).filter(models.User.username == "teacher").first()
+    if not alias_teacher:
+        alias_teacher = models.User(username="teacher", hashed_password=default_pw_hash, role="Teacher")
+        db.add(alias_teacher)
+        db.commit()
+        db.refresh(alias_teacher)
+        alias_t_prof = models.Teacher(name="Faculty Coordinator", employee_id="teacher", user_id=alias_teacher.id)
+        db.add(alias_t_prof)
+    else:
+        alias_teacher.hashed_password = default_pw_hash
+
+    # 3. Student (CS-2024 and alias student, password: 1234ms)
+    student_user = db.query(models.User).filter(models.User.username == "CS-2024").first()
+    if not student_user:
+        student_user = models.User(username="CS-2024", hashed_password=default_pw_hash, role="Student")
+        db.add(student_user)
+        db.commit()
+        db.refresh(student_user)
+        s_prof = models.Student(
+            name="Alex Rivera",
+            roll_number="CS-2024",
+            grade_level="Grade 12",
+            date_of_birth="2006-08-15",
+            emergency_contact="+1-555-0199",
+            user_id=student_user.id
+        )
+        db.add(s_prof)
+    else:
+        student_user.hashed_password = default_pw_hash
+
+    alias_student = db.query(models.User).filter(models.User.username == "student").first()
+    if not alias_student:
+        alias_student = models.User(username="student", hashed_password=default_pw_hash, role="Student")
+        db.add(alias_student)
+        db.commit()
+        db.refresh(alias_student)
+        alias_s_prof = models.Student(
+            name="Jordan Lee",
+            roll_number="student",
+            grade_level="Grade 12",
+            date_of_birth="2006-05-20",
+            emergency_contact="+1-555-0188",
+            user_id=alias_student.id
+        )
+        db.add(alias_s_prof)
+    else:
+        alias_student.hashed_password = default_pw_hash
+
+    # Seed default subjects if none exist
+    if db.query(models.Subject).count() == 0:
+        for s_name in ["Mathematics", "Physics", "Computer Science", "English"]:
+            db.add(models.Subject(name=s_name))
+
+    db.commit()
     db.close()
 
 init_db()

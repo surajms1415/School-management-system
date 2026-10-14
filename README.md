@@ -345,15 +345,15 @@ School-management-system/
 
 ## 🔑 Default Credentials
 
-On first run, the backend automatically seeds a default system administrator account:
+The system comes pre-configured with reset credentials for all roles:
 
 | Role | Username / Identifier | Password | Access Level |
 |---|---|---|---|
-| **Admin** | `admin` | `admin` | Full institutional management & Risk Radar |
-| **Teacher** | Assigned Employee ID (e.g. `EMP-101`) | Configured at creation | Classroom attendance, grading & AI Report Cards |
-| **Student** | Student Roll Number (e.g. `CS-2024`) | Configured at creation* | View attendance, AI Study Plan & Report Card |
+| **Admin** | `admin` | `1234ms` | Full institutional management, user CRUD & Risk Radar |
+| **Teacher** | `EMP-101` or `teacher` | `1234ms` | Classroom attendance, grading & 1-Click AI Report Cards |
+| **Student** | `CS-2024` or `student` | `1234ms` | View attendance, AI Weekly Study Plan & Report Card |
 
-*\* Note: For students imported via CSV bulk upload, their initial password defaults to their Roll Number.*
+*\* Note: For new students imported via CSV bulk upload, their initial password defaults to their Roll Number or 1234ms.*
 
 ---
 
