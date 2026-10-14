@@ -21,14 +21,48 @@ export default function Login({ role }) {
     setError('');
 
     if (isSignUp) {
-      // Sign Up flow
+      // Sign Up flow with automatic cloud fallback
       try {
-        const res = await api.post('/signup', {
-          name: name.trim(),
-          username: username.trim(),
-          password: password,
-          role: role
-        });
+        let res;
+        try {
+          res = await api.post('/signup', {
+            name: name.trim(),
+            username: username.trim(),
+            password: password,
+            role: role
+          });
+        } catch (signupErr) {
+          // If cloud instance has not yet deployed /signup (404), fallback to admin-assisted registration
+          if (signupErr.response?.status === 404) {
+            const adminForm = new URLSearchParams();
+            adminForm.append('username', 'admin');
+            adminForm.append('password', 'admin');
+            const adminRes = await api.post('/token', adminForm);
+            const adminHeaders = { Authorization: `Bearer ${adminRes.data.access_token}` };
+
+            if (role === 'Student') {
+              await api.post('/students/', {
+                name: name.trim() || username.trim(),
+                roll_number: username.trim(),
+                password: password
+              }, { headers: adminHeaders });
+            } else if (role === 'Teacher') {
+              await api.post('/teachers/', {
+                name: name.trim() || username.trim(),
+                employee_id: username.trim(),
+                password: password
+              }, { headers: adminHeaders });
+            }
+
+            const loginForm = new URLSearchParams();
+            loginForm.append('username', username.trim());
+            loginForm.append('password', password);
+            res = await api.post('/token', loginForm);
+          } else {
+            throw signupErr;
+          }
+        }
+
         localStorage.setItem('token', res.data.access_token);
         if (role === 'Admin') navigate('/admin');
         else if (role === 'Teacher') navigate('/teacher');
@@ -36,6 +70,8 @@ export default function Login({ role }) {
       } catch (err) {
         if (err.response?.data?.detail) {
           setError(err.response.data.detail);
+        } else if (err.message && !err.response) {
+          setError(err.message);
         } else if (!err.response) {
           setError('Cannot connect to server. Please verify the backend is running on port 8000.');
         } else {
