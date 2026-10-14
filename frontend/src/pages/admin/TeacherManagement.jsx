@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaSearch, FaEdit, FaTrash, FaTimes } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEdit, FaTrash, FaTimes, FaEye, FaEyeSlash } from 'react-icons/fa';
 import api from '../../utils/api';
 
 export default function TeacherManagement() {
@@ -8,6 +8,7 @@ export default function TeacherManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ name: '', employee_id: '', password: '' });
 
   useEffect(() => {
@@ -198,11 +199,22 @@ export default function TeacherManagement() {
                 {!editingId && (
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
-                    <input 
-                      type="password" required
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
-                      value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}
-                    />
+                    <div className="relative">
+                      <input 
+                        type={showPassword ? 'text' : 'password'} required
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all pr-12"
+                        value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-purple-600 transition-colors p-1"
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <FaEyeSlash className="text-lg" /> : <FaEye className="text-lg" />}
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div className="pt-6 flex justify-end gap-3">

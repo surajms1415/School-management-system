@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaSearch, FaEdit, FaTrash, FaTimes, FaFileUpload } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEdit, FaTrash, FaTimes, FaFileUpload, FaEye, FaEyeSlash } from 'react-icons/fa';
 import api from '../../utils/api';
 
 export default function StudentManagement() {
   const [students, setStudents] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ name: '', roll_number: '', password: '', date_of_birth: '', grade_level: '', emergency_contact: '' });
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef(null);
@@ -265,11 +266,22 @@ export default function StudentManagement() {
                   {!editingId && (
                     <div className="col-span-2">
                       <label className="block text-sm font-medium text-slate-700 mb-1">Login Password</label>
-                      <input 
-                        type="password" required
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}
-                      />
+                      <div className="relative">
+                        <input 
+                          type={showPassword ? 'text' : 'password'} required
+                          className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                          value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors p-1"
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <FaEyeSlash className="text-base" /> : <FaEye className="text-base" />}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
