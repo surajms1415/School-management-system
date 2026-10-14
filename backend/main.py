@@ -134,6 +134,50 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
     )
     return {"access_token": access_token, "token_type": "bearer", "role": user.role}
 
+@app.post("/signup", response_model=schemas.Token)
+def signup(req: schemas.UserRegister, db: Session = Depends(database.get_db)):
+    clean_username = req.username.strip()
+    clean_name = req.name.strip() if req.name else clean_username
+    if not clean_username or not req.password:
+        raise HTTPException(status_code=400, detail="Username and password are required")
+    
+    if req.role not in ["Admin", "Teacher", "Student"]:
+        raise HTTPException(status_code=400, detail="Invalid role specified")
+        
+    existing_user = db.query(models.User).filter(models.User.username == clean_username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail=f"Username/ID '{clean_username}' is already registered")
+
+    hashed_pw = auth.get_password_hash(req.password)
+    new_user = models.User(username=clean_username, hashed_password=hashed_pw, role=req.role)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    if req.role == "Student":
+        new_student = models.Student(
+            name=clean_name,
+            roll_number=clean_username,
+            grade_level="General",
+            user_id=new_user.id
+        )
+        db.add(new_student)
+    elif req.role == "Teacher":
+        new_teacher = models.Teacher(
+            name=clean_name,
+            employee_id=clean_username,
+            user_id=new_user.id
+        )
+        db.add(new_teacher)
+
+    db.commit()
+
+    access_token_expires = auth.timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": new_user.username, "role": new_user.role}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer", "role": new_user.role}
+
 # --- Admin Routes ---
 @app.post("/students/", response_model=schemas.Student)
 def create_student(student: schemas.StudentCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):

@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { motion } from 'framer-motion';
-import { FaUserShield, FaChalkboardTeacher, FaUserGraduate, FaArrowLeft, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaUserShield, FaChalkboardTeacher, FaUserGraduate, FaArrowLeft, FaEye, FaEyeSlash, FaUserPlus } from 'react-icons/fa';
 import api from '../utils/api';
 
 export default function Login({ role }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -13,10 +15,39 @@ export default function Login({ role }) {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    if (isSignUp) {
+      // Sign Up flow
+      try {
+        const res = await api.post('/signup', {
+          name: name.trim(),
+          username: username.trim(),
+          password: password,
+          role: role
+        });
+        localStorage.setItem('token', res.data.access_token);
+        if (role === 'Admin') navigate('/admin');
+        else if (role === 'Teacher') navigate('/teacher');
+        else navigate('/student');
+      } catch (err) {
+        if (err.response?.data?.detail) {
+          setError(err.response.data.detail);
+        } else if (!err.response) {
+          setError('Cannot connect to server. Please verify the backend is running on port 8000.');
+        } else {
+          setError('Failed to create account. Username/ID may already be taken.');
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Sign In flow
     try {
       const formData = new URLSearchParams();
       formData.append('username', username.trim());
@@ -26,7 +57,7 @@ export default function Login({ role }) {
       try {
         res = await api.post('/token', formData);
       } catch (tokenErr) {
-        // Fallback for un-redeployed cloud instances where password is still legacy
+        // Fallback for un-redeployed cloud instances where default password is still legacy
         if (tokenErr.response?.status === 401 && password === '1234ms') {
           const fallbackData = new URLSearchParams();
           fallbackData.append('username', username.trim());
@@ -77,7 +108,7 @@ export default function Login({ role }) {
   const usernamePlaceholder = role === 'Admin' ? 'e.g. admin' : role === 'Teacher' ? 'e.g. EMP-101' : 'e.g. CS-2024';
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center relative overflow-hidden px-4">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center relative overflow-hidden px-4 py-12">
       {/* Background matches Home Page for seamless transition */}
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 opacity-90 z-0"></div>
@@ -100,23 +131,43 @@ export default function Login({ role }) {
         transition={{ duration: 0.5 }}
         className="max-w-md w-full bg-slate-800/50 backdrop-blur-2xl border border-slate-700 p-10 rounded-[2.5rem] shadow-2xl relative z-10"
       >
-        <div className="flex flex-col items-center mb-10">
+        <div className="flex flex-col items-center mb-8">
           <div className={`${bgClass}/20 w-24 h-24 rounded-[2rem] flex items-center justify-center mb-6 border border-white/5 shadow-inner transform rotate-3`}>
             <div className={`w-full h-full bg-white/5 rounded-[2rem] flex items-center justify-center -rotate-3`}>
                 <Icon className={`text-5xl ${colorClass}`} />
             </div>
           </div>
           <h2 className="text-center text-4xl font-black text-white tracking-tight">
-            {role}
+            {isSignUp ? `${role} Sign Up` : role}
           </h2>
           <p className="mt-2 text-center text-slate-400 font-medium">
-            Authenticate to access your dashboard
+            {isSignUp ? `Create a new ${role.toLowerCase()} account` : `Authenticate to access your dashboard`}
           </p>
         </div>
 
-        <form className="space-y-6" onSubmit={handleLogin}>
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          {isSignUp && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              transition={{ duration: 0.3 }}
+            >
+              <label className="block text-sm font-semibold text-slate-300 mb-2">Full Name</label>
+              <input
+                type="text"
+                required
+                className="w-full px-5 py-4 bg-slate-900/50 border border-slate-700 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                placeholder={role === 'Teacher' ? 'e.g. Prof. Robert Davis' : 'e.g. Alex Rivera'}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </motion.div>
+          )}
+
           <div>
-            <label className="block text-sm font-semibold text-slate-300 mb-2">{usernameLabel}</label>
+            <label className="block text-sm font-semibold text-slate-300 mb-2">
+              {isSignUp ? `Assign ${usernameLabel}` : usernameLabel}
+            </label>
             <input
               type="text"
               required
@@ -127,12 +178,14 @@ export default function Login({ role }) {
             />
             {role !== 'Admin' && (
               <p className="text-xs text-slate-500 mt-2">
-                * Note: Do not use your name. Use your assigned {role === 'Teacher' ? 'Employee ID' : 'Roll Number'}.
+                * Note: Use your assigned {role === 'Teacher' ? 'Employee ID' : 'Roll Number'} (e.g. {usernamePlaceholder}).
               </p>
             )}
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-300 mb-2">Password</label>
+            <label className="block text-sm font-semibold text-slate-300 mb-2">
+              {isSignUp ? 'Choose Password' : 'Password'}
+            </label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -158,9 +211,18 @@ export default function Login({ role }) {
             <motion.div 
               initial={{ opacity: 0, height: 0 }} 
               animate={{ opacity: 1, height: 'auto' }} 
-              className="text-red-400 text-sm text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20 font-medium"
+              className="text-red-400 text-sm text-center bg-red-500/10 p-4 rounded-xl border border-red-500/20 font-medium space-y-2"
             >
-              {error}
+              <p>{error}</p>
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={() => { setIsSignUp(true); setError(''); }}
+                  className="mt-2 text-xs font-bold text-white bg-white/10 hover:bg-white/20 px-3.5 py-1.5 rounded-xl border border-white/20 transition-all inline-flex items-center gap-1.5 shadow-sm"
+                >
+                  <FaUserPlus /> Not registered? Sign up as {role} now &rarr;
+                </button>
+              )}
             </motion.div>
           )}
 
@@ -169,8 +231,22 @@ export default function Login({ role }) {
             disabled={loading}
             className={`w-full flex justify-center py-4 px-4 border border-transparent rounded-2xl shadow-lg text-lg font-bold text-white ${bgClass} hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500 transition-all transform hover:scale-[1.02] ${loading ? 'opacity-50 cursor-not-allowed scale-100' : ''}`}
           >
-            {loading ? 'Authenticating...' : 'Sign In'}
+            {loading ? (isSignUp ? 'Creating Account...' : 'Authenticating...') : (isSignUp ? `Sign Up as ${role}` : 'Sign In')}
           </button>
+
+          <div className="text-center pt-2 border-t border-white/5">
+            <button
+              type="button"
+              onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
+              className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
+            >
+              {isSignUp ? (
+                <>Already have an account? <span className="text-blue-400 font-bold underline ml-1">Sign In</span></>
+              ) : (
+                <>New user or need an account? <span className="text-blue-400 font-bold underline ml-1">Sign Up as {role}</span></>
+              )}
+            </button>
+          </div>
         </form>
       </motion.div>
     </div>

@@ -9,6 +9,12 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
+class UserRegister(BaseModel):
+    name: str
+    username: str
+    password: str
+    role: str
+
 class User(UserBase):
     id: int
     class Config:
