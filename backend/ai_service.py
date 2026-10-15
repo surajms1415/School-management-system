@@ -237,7 +237,12 @@ def generate_study_plan(
             weak_areas.append(entry)
 
     # Heuristic Diagnostic Summary
-    if weak_areas:
+    if count == 0:
+        diagnosis = (
+            f"{student_name} is currently registered and actively participating in coursework. "
+            f"Follow the preparatory 7-day revision schedule below to establish strong study habits and prepare for upcoming evaluations."
+        )
+    elif weak_areas:
         weak_names = ", ".join([w["subject"] for w in weak_areas])
         diagnosis = (
             f"{student_name} demonstrates an overall average of {average_score}%, with notable proficiency in "
@@ -363,7 +368,7 @@ def generate_report_card(
     total_marks = sum(r.get("marks", 0) for r in results_data)
     count = len(results_data)
     average_score = round(total_marks / count, 1) if count > 0 else 0.0
-    overall_grade = calculate_letter_grade(average_score)
+    overall_grade = calculate_letter_grade(average_score) if count > 0 else "In Progress"
 
     att_pct = attendance_data.get("current_percentage", 100.0)
     att_risk = attendance_data.get("risk_level", "Low")
@@ -390,6 +395,14 @@ def generate_report_card(
             "evaluator_remark": remark
         })
 
+    if not subject_evaluations:
+        subject_evaluations.append({
+            "subject": "Enrolled Coursework",
+            "marks": 0,
+            "grade": "In Progress",
+            "evaluator_remark": "Coursework in progress. Marks will be reflected upon conclusion of examinations."
+        })
+
     # Conduct / Attendance behavioral evaluation
     if att_pct >= 90:
         conduct = "Exemplary Attendance & Punctuality"
@@ -404,7 +417,12 @@ def generate_report_card(
         f"{average_score}% ({overall_grade}). "
         f"In terms of engagement, the student has logged an attendance rate of {att_pct}%, categorized as {att_risk} risk. "
     )
-    if average_score >= 80:
+    if count == 0:
+        overall_evaluation += (
+            f"The student is actively registered in the current term. "
+            f"Regular attendance and proactive coursework engagement are encouraged throughout the session."
+        )
+    elif average_score >= 80:
         overall_evaluation += (
             f"The student reflects commendable intellectual curiosity and academic discipline. "
             f"Teachers commend their work ethic and encourage them to undertake elective enrichment projects."

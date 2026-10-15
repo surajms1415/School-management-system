@@ -7,6 +7,7 @@ import {
 } from 'react-icons/fa';
 import DashboardLayout from '../components/DashboardLayout';
 import api from '../utils/api';
+import { calculateAttendanceRisk, generateReportCard as generateClientReportCard } from '../utils/aiGenerator';
 
 export default function TeacherDashboard() {
   const [students, setStudents] = useState([]);
@@ -39,7 +40,7 @@ export default function TeacherDashboard() {
       setSubjects(subRes.data);
       if (subRes.data.length > 0) setSelectedSubject(subRes.data[0].id);
 
-      // Fetch AI attendance risk overview
+      // Fetch AI attendance risk overview with client fallback
       try {
         const riskRes = await api.get('/ai/attendance-risk-overview/');
         const riskMap = {};
@@ -48,7 +49,20 @@ export default function TeacherDashboard() {
         });
         setRiskOverview(riskMap);
       } catch (e) {
-        console.warn('Could not load attendance risk overview:', e);
+        console.warn('Backend /ai/attendance-risk-overview/ unreachable, calculating client risk overview:', e);
+        try {
+          const attRes = await api.get('/attendance/');
+          const subMap = {};
+          (subRes.data || []).forEach(s => { subMap[s.id] = s.name; });
+          const riskMap = {};
+          (studRes.data || []).forEach(st => {
+            const stAtt = (attRes.data || []).filter(a => a.student_id === st.id);
+            riskMap[st.id] = calculateAttendanceRisk(st.name, stAtt, subMap);
+          });
+          setRiskOverview(riskMap);
+        } catch (attErr) {
+          console.warn('Could not compute attendance risk overview fallback:', attErr);
+        }
       }
     } catch (err) {
       console.error('Error fetching teacher data:', err);
@@ -69,7 +83,19 @@ export default function TeacherDashboard() {
         const riskMap = {};
         res.data.forEach(r => { riskMap[r.student_id] = r; });
         setRiskOverview(riskMap);
-      }).catch(() => {});
+      }).catch(async () => {
+        try {
+          const attRes = await api.get('/attendance/');
+          const subMap = {};
+          subjects.forEach(s => { subMap[s.id] = s.name; });
+          const riskMap = {};
+          students.forEach(st => {
+            const stAtt = (attRes.data || []).filter(a => a.student_id === st.id);
+            riskMap[st.id] = calculateAttendanceRisk(st.name, stAtt, subMap);
+          });
+          setRiskOverview(riskMap);
+        } catch (e) {}
+      });
     } catch (err) {
       console.error(err);
       alert('Failed to mark attendance.');
@@ -91,7 +117,7 @@ export default function TeacherDashboard() {
     }
   };
 
-  // 1-Click AI Report Card & Feedback Generator
+  // 1-Click AI Report Card & Feedback Generator with automatic fallback
   const generateReportCard = async (studentId) => {
     setLoadingReportCard(true);
     setReportCardModal(true);
@@ -100,9 +126,47 @@ export default function TeacherDashboard() {
       const res = await api.get(`/ai/report-card/${studentId}`);
       setActiveReportCard(res.data);
     } catch (err) {
-      console.error('Failed to generate report card:', err);
-      alert('Failed to generate AI report card. Please ensure the backend is active.');
-      setReportCardModal(false);
+      console.warn('Backend /ai/report-card/ unavailable, compiling client-side fallback report card:', err);
+      try {
+        const student = students.find(s => s.id === studentId);
+        const subMap = {};
+        subjects.forEach(s => { subMap[s.id] = s.name; });
+
+        let studentResults = [];
+        try {
+          const resRes = await api.get('/results/');
+          studentResults = (resRes.data || []).filter(r => r.student_id === studentId).map(r => ({
+            subject_id: r.subject_id,
+            subject_name: subMap[r.subject_id] || `Subject #${r.subject_id}`,
+            marks: r.marks
+          }));
+        } catch (rErr) {
+          console.warn('Could not load student results for report card fallback:', rErr);
+        }
+
+        let studentAttendance = [];
+        try {
+          const attRes = await api.get('/attendance/');
+          studentAttendance = (attRes.data || []).filter(a => a.student_id === studentId);
+        } catch (aErr) {
+          console.warn('Could not load student attendance for report card fallback:', aErr);
+        }
+
+        const attRisk = riskOverview[studentId] || calculateAttendanceRisk(student?.name, studentAttendance, subMap);
+        const fallbackCard = generateClientReportCard(
+          student?.name || `Student #${studentId}`,
+          student?.roll_number || `${studentId}`,
+          student?.grade_level || 'General',
+          studentResults,
+          attRisk,
+          'Academic Faculty Board'
+        );
+        setActiveReportCard(fallbackCard);
+      } catch (fallbackErr) {
+        console.error('Failed to generate fallback report card:', fallbackErr);
+        alert('Failed to compile report card. Please verify student records.');
+        setReportCardModal(false);
+      }
     } finally {
       setLoadingReportCard(false);
     }

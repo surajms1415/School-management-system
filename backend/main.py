@@ -452,7 +452,7 @@ def upload_marks(result: schemas.ResultCreate, db: Session = Depends(database.ge
 
 @app.get("/results/", response_model=List[schemas.Result])
 def get_all_results(skip: int = 0, limit: int = 1000, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    if current_user.role != "Admin":
+    if current_user.role not in ["Admin", "Teacher"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     return db.query(models.Result).offset(skip).limit(limit).all()
 
@@ -486,7 +486,7 @@ def delete_result(result_id: int, db: Session = Depends(database.get_db), curren
 def get_my_attendance(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     if current_user.role != "Student":
         raise HTTPException(status_code=403, detail="Not authorized")
-    student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    student = db.query(models.Student).filter((models.Student.user_id == current_user.id) | (models.Student.roll_number == current_user.username)).first()
     if not student:
         return []
     return db.query(models.Attendance).filter(models.Attendance.student_id == student.id).all()
@@ -495,7 +495,7 @@ def get_my_attendance(db: Session = Depends(database.get_db), current_user: mode
 def get_my_results(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     if current_user.role != "Student":
         raise HTTPException(status_code=403, detail="Not authorized")
-    student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    student = db.query(models.Student).filter((models.Student.user_id == current_user.id) | (models.Student.roll_number == current_user.username)).first()
     if not student:
         return []
     return db.query(models.Result).filter(models.Result.student_id == student.id).all()
@@ -512,7 +512,7 @@ def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
 def get_my_attendance_risk(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     if current_user.role != "Student":
         raise HTTPException(status_code=403, detail="Not authorized")
-    student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    student = db.query(models.Student).filter((models.Student.user_id == current_user.id) | (models.Student.roll_number == current_user.username)).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
     
@@ -572,7 +572,7 @@ def get_all_attendance_risk_overview(db: Session = Depends(database.get_db), cur
 def get_study_plan(student_id: Optional[int] = None, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     target_student = None
     if current_user.role == "Student":
-        target_student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+        target_student = db.query(models.Student).filter((models.Student.user_id == current_user.id) | (models.Student.roll_number == current_user.username)).first()
     elif current_user.role in ["Admin", "Teacher"] and student_id is not None:
         target_student = db.query(models.Student).filter(models.Student.id == student_id).first()
     elif current_user.role in ["Admin", "Teacher"] and student_id is None:
@@ -616,7 +616,7 @@ def get_student_report_card(student_id: int, db: Session = Depends(database.get_
         raise HTTPException(status_code=404, detail="Student not found")
         
     if current_user.role == "Student":
-        if student.user_id != current_user.id:
+        if student.user_id != current_user.id and student.roll_number != current_user.username:
             raise HTTPException(status_code=403, detail="Not authorized to view other students' report cards")
     elif current_user.role not in ["Admin", "Teacher"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -652,7 +652,7 @@ def get_student_report_card(student_id: int, db: Session = Depends(database.get_
 def get_my_report_card(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
     if current_user.role != "Student":
         raise HTTPException(status_code=403, detail="Not authorized")
-    student = db.query(models.Student).filter(models.Student.user_id == current_user.id).first()
+    student = db.query(models.Student).filter((models.Student.user_id == current_user.id) | (models.Student.roll_number == current_user.username)).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
     

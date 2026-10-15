@@ -7,6 +7,7 @@ import {
 } from 'react-icons/fa';
 import DashboardLayout from '../components/DashboardLayout';
 import api from '../utils/api';
+import { calculateAttendanceRisk, generateStudyPlan, generateReportCard } from '../utils/aiGenerator';
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'study-plan' | 'report-card'
@@ -42,12 +43,17 @@ export default function StudentDashboard() {
       setResults(resRes.data);
       setSubjects(subRes.data);
 
-      // Fetch AI Attendance Risk
+      const subMap = {};
+      (subRes.data || []).forEach(s => { subMap[s.id] = s.name; });
+
+      // Fetch AI Attendance Risk with client fallback
       try {
         const riskRes = await api.get('/ai/attendance-risk/');
         setAttendanceRisk(riskRes.data);
       } catch (e) {
-        console.warn('Could not load attendance risk:', e);
+        console.warn('Backend /ai/attendance-risk/ unreachable, computing client early-warning model:', e);
+        const fallbackRisk = calculateAttendanceRisk(profRes.data?.username || 'Student', attRes.data || [], subMap);
+        setAttendanceRisk(fallbackRisk);
       }
     } catch (err) {
       console.error('Error fetching student data:', err);
@@ -62,7 +68,23 @@ export default function StudentDashboard() {
         const res = await api.get('/ai/study-plan/');
         setStudyPlan(res.data);
       } catch (err) {
-        console.error('Failed to load study plan:', err);
+        console.warn('Backend /ai/study-plan/ unavailable, generating tailored client study plan:', err);
+        const subMap = {};
+        subjects.forEach(s => { subMap[s.id] = s.name; });
+        const resultsData = results.map(r => ({
+          subject_id: r.subject_id,
+          subject_name: subMap[r.subject_id] || `Subject #${r.subject_id}`,
+          marks: r.marks
+        }));
+        const currentRisk = attendanceRisk || calculateAttendanceRisk(profile?.username, attendance, subMap);
+        const generated = generateStudyPlan(
+          profile?.username || 'Student',
+          profile?.username || 'N/A',
+          'Enrolled Student',
+          resultsData,
+          currentRisk
+        );
+        setStudyPlan(generated);
       } finally {
         setLoadingAI(false);
       }
@@ -77,7 +99,24 @@ export default function StudentDashboard() {
         const res = await api.get('/ai/my-report-card/');
         setReportCard(res.data);
       } catch (err) {
-        console.error('Failed to load report card:', err);
+        console.warn('Backend /ai/my-report-card/ unavailable, synthesizing official client report card:', err);
+        const subMap = {};
+        subjects.forEach(s => { subMap[s.id] = s.name; });
+        const resultsData = results.map(r => ({
+          subject_id: r.subject_id,
+          subject_name: subMap[r.subject_id] || `Subject #${r.subject_id}`,
+          marks: r.marks
+        }));
+        const currentRisk = attendanceRisk || calculateAttendanceRisk(profile?.username, attendance, subMap);
+        const generated = generateReportCard(
+          profile?.username || 'Student',
+          profile?.username || 'N/A',
+          'Enrolled Student',
+          resultsData,
+          currentRisk,
+          'Academic Board'
+        );
+        setReportCard(generated);
       } finally {
         setLoadingAI(false);
       }
@@ -427,7 +466,25 @@ export default function StudentDashboard() {
                   </div>
                 </div>
               </>
-            ) : null}
+            ) : (
+              <div className="py-20 flex flex-col items-center justify-center space-y-4 bg-white/5 rounded-3xl border border-white/10 p-8 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-3xl border border-cyan-500/30">
+                  <FaRobot />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">7-Day AI Study Plan Ready</h3>
+                  <p className="text-sm text-slate-400 max-w-md mt-1">
+                    Generate your tailored revision timetable and academic performance diagnosis.
+                  </p>
+                </div>
+                <button
+                  onClick={loadStudyPlan}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-sm shadow-lg hover:shadow-cyan-500/25 transition-all"
+                >
+                  Generate Study Plan
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -528,7 +585,25 @@ export default function StudentDashboard() {
                   </div>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="py-20 flex flex-col items-center justify-center space-y-4 bg-white/5 rounded-3xl border border-white/10 p-8 text-center max-w-xl mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-3xl border border-purple-500/30">
+                  <FaGraduationCap />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Official AI Report Card</h3>
+                  <p className="text-sm text-slate-400 max-w-md mt-1">
+                    Synthesize grades, attendance standing, and personalized faculty evaluations.
+                  </p>
+                </div>
+                <button
+                  onClick={loadReportCard}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold text-sm shadow-lg hover:shadow-purple-500/25 transition-all"
+                >
+                  Generate Report Card
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
